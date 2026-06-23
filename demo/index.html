@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>behavior-tree-canvas demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <strong>Behavior Tree Canvas</strong>
+        <button id="undo" disabled>Undo</button>
+        <button id="redo" disabled>Redo</button>
+        <button id="fit">Fit</button>
+        <button id="arrange">Arrange</button>
+        <button id="export-json">Export</button>
+        <button id="import-json">Import</button>
+        <input id="import-json-file" type="file" accept="application/json,.json" hidden />
+        <span id="selection">No selection</span>
+      </header>
+      <section id="workspace">
+        <section id="canvas"></section>
+        <aside id="sidepanel">
+          <section id="inspector">
+            <div class="inspector-empty">No selection</div>
+          </section>
+          <section id="diagnostics-panel"></section>
+        </aside>
+      </section>
+      <div id="palette" hidden></div>
+    </main>
+    <script type="module" src="./bundle.js"></script>
+  </body>
+</html>

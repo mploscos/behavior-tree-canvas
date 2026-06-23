@@ -1,0 +1,53 @@
+{
+  "name": "behavior-tree-canvas",
+  "version": "0.1.0",
+  "description": "PixiJS behavior tree viewer/editor surface",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./core": {
+      "types": "./src/index.d.ts",
+      "default": "./src/core.js"
+    },
+    "./renderer": {
+      "types": "./src/index.d.ts",
+      "default": "./src/behavior-tree-canvas.js"
+    },
+    "./theme": {
+      "types": "./src/theme.d.ts",
+      "default": "./src/theme.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "private": false,
+  "scripts": {
+    "demo": "npm run demo:build && python3 -m http.server 4174 --bind localhost",
+    "demo:build": "esbuild demo/main.js --bundle --format=esm --outfile=demo/bundle.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "behavior-tree",
+    "behaviour-tree",
+    "pixijs",
+    "tree-editor",
+    "visualization"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "pixi.js": ">=8 <9"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "pixi.js": "8.19.0"
+  }
+}
