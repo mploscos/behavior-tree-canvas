@@ -1,6 +1,6 @@
 {
   "name": "behavior-tree-canvas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "PixiJS behavior tree viewer/editor surface",
   "type": "module",
   "main": "./src/index.js",

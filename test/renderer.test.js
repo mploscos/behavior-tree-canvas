@@ -23,6 +23,23 @@ test("serializes and loads tree copies without sharing references", () => {
   assert.equal(viewer.getTree().nodes[0].id, "next");
 });
 
+test("public APIs reject invalid input instead of applying silent defaults", () => {
+  assert.throws(() => new BehaviorTreeCanvas(), /options/);
+  assert.throws(() => new BehaviorTreeCanvas({ target: {}, tree: null }), /tree/);
+  assert.throws(() => new BehaviorTreeCanvas({ target: {}, minZoom: 0 }), /minZoom/);
+  assert.throws(() => new BehaviorTreeCanvas({ target: {}, minZoom: 3, maxZoom: 2 }), /maxZoom/);
+
+  const viewer = new BehaviorTreeCanvas({
+    target: {},
+    tree: { rootId: "root", nodes: [{ id: "root" }] }
+  });
+
+  assert.throws(() => viewer.setTree(null), /tree/);
+  assert.throws(() => viewer.setNodeTypes(null), /nodeTypes/);
+  assert.throws(() => viewer.setTheme(null), /theme/);
+  assert.throws(() => viewer.setExecutionFlow({ nodeIds: "root" }), /nodeIds/);
+});
+
 test("tracks and deletes multiple selected nodes", () => {
   const viewer = new BehaviorTreeCanvas({
     target: {},

@@ -72,25 +72,50 @@ export class BehaviorTreeCanvas {
      * @param {BehaviorTreeCanvasOptions} options
      */
     constructor(options) {
-        if (!options?.target) throw new Error("BehaviorTreeCanvas requires a target HTMLElement");
+        if (!options || typeof options !== "object") throw new TypeError("BehaviorTreeCanvas requires an options object");
+        if (!options.target || typeof options.target !== "object") throw new TypeError("BehaviorTreeCanvas requires a target HTMLElement");
+        if (Object.prototype.hasOwnProperty.call(options, "tree")) assertTreeModel(options.tree, "tree");
+        if (Object.prototype.hasOwnProperty.call(options, "nodeTypes")) assertPlainObject(options.nodeTypes, "nodeTypes");
+        if (Object.prototype.hasOwnProperty.call(options, "theme") && options.theme !== undefined) assertPlainObject(options.theme, "theme");
+        if (Object.prototype.hasOwnProperty.call(options, "readonly")) assertBoolean(options.readonly, "readonly");
+        if (Object.prototype.hasOwnProperty.call(options, "showGrid")) assertBoolean(options.showGrid, "showGrid");
+        const width = options.width ?? 960;
+        const height = options.height ?? 640;
+        const nodeWidth = options.nodeWidth ?? 184;
+        const nodeHeight = options.nodeHeight ?? 66;
+        const horizontalGap = options.horizontalGap ?? 54;
+        const verticalGap = options.verticalGap ?? 86;
+        const minZoom = options.minZoom ?? 0.2;
+        const maxZoom = options.maxZoom ?? 2.4;
+        const historyLimit = options.historyLimit ?? 80;
+        assertPositiveNumber(width, "width");
+        assertPositiveNumber(height, "height");
+        assertPositiveNumber(nodeWidth, "nodeWidth");
+        assertPositiveNumber(nodeHeight, "nodeHeight");
+        assertPositiveNumber(horizontalGap, "horizontalGap");
+        assertPositiveNumber(verticalGap, "verticalGap");
+        assertPositiveNumber(minZoom, "minZoom");
+        assertPositiveNumber(maxZoom, "maxZoom");
+        assertPositiveInteger(historyLimit, "historyLimit");
+        if (maxZoom < minZoom) throw new RangeError("maxZoom must be greater than or equal to minZoom");
         this.target = options.target;
-        this.tree = options.tree || { rootId: "", nodes: [] };
-        this.nodeTypes = options.nodeTypes || {};
+        this.tree = options.tree ? cloneTree(options.tree) : { rootId: "", nodes: [] };
+        this.nodeTypes = options.nodeTypes ?? {};
         this.theme = createBehaviorTreeTheme(options.theme);
-        this.width = options.width || 960;
-        this.height = options.height || 640;
+        this.width = width;
+        this.height = height;
         this.background = options.background ?? toColor(this.theme.canvas.background, 0);
         this.backgroundAlpha = options.backgroundAlpha ?? this.theme.canvas.backgroundAlpha;
-        this.resizeTo = options.resizeTo === false ? false : (options.resizeTo || options.target);
+        this.resizeTo = options.resizeTo === false ? false : (options.resizeTo ?? options.target);
         this.readonly = options.readonly === true;
         this.showGrid = options.showGrid !== false;
-        this.nodeWidth = options.nodeWidth || 184;
-        this.nodeHeight = options.nodeHeight || 66;
-        this.horizontalGap = options.horizontalGap || 54;
-        this.verticalGap = options.verticalGap || 86;
-        this.minZoom = options.minZoom || 0.2;
-        this.maxZoom = options.maxZoom || 2.4;
-        this.historyLimit = options.historyLimit || 80;
+        this.nodeWidth = nodeWidth;
+        this.nodeHeight = nodeHeight;
+        this.horizontalGap = horizontalGap;
+        this.verticalGap = verticalGap;
+        this.minZoom = minZoom;
+        this.maxZoom = maxZoom;
+        this.historyLimit = historyLimit;
     }
 
     /**
@@ -159,7 +184,8 @@ export class BehaviorTreeCanvas {
 
     /** @param {BehaviorTreeModel} tree */
     setTree(tree) {
-        this.tree = cloneTree(tree || { rootId: "", nodes: [] });
+        assertTreeModel(tree, "tree");
+        this.tree = cloneTree(tree);
         this.#undoStack = [];
         this.#redoStack = [];
         this.selectedNodeId = "";
@@ -184,8 +210,10 @@ export class BehaviorTreeCanvas {
      * @param {{recordHistory?:boolean, clearHistory?:boolean, reason?:string}} [options]
      */
     loadTree(tree, options = {}) {
+        assertTreeModel(tree, "tree");
+        assertPlainObject(options, "options");
         if (options.recordHistory) this.#recordHistory();
-        this.tree = cloneTree(tree || { rootId: "", nodes: [] });
+        this.tree = cloneTree(tree);
         this.selectedNodeId = "";
         this.selectedEdgeId = "";
         this.#selectedNodeIds.clear();
@@ -194,7 +222,7 @@ export class BehaviorTreeCanvas {
             this.#redoStack = [];
         }
         this.render();
-        this.#emit("treechange", { tree: this.tree, reason: options.reason || "load-tree" });
+        this.#emit("treechange", { tree: this.tree, reason: options.reason ?? "load-tree" });
         this.#emitSelectionChange();
         this.#emitHistoryChange();
         return this.getTree();
@@ -266,8 +294,11 @@ export class BehaviorTreeCanvas {
      * @param {{nodeIds?:string[],edgeIds?:string[]} | string[]} flow
      */
     setExecutionFlow(flow = {}) {
-        const edgeIds = Array.isArray(flow) ? flow : (flow.edgeIds || []);
-        const nodeIds = Array.isArray(flow) ? [] : (flow.nodeIds || []);
+        if (!Array.isArray(flow)) assertPlainObject(flow, "flow");
+        const edgeIds = Array.isArray(flow) ? flow : (flow.edgeIds ?? []);
+        const nodeIds = Array.isArray(flow) ? [] : (flow.nodeIds ?? []);
+        assertArray(edgeIds, "flow.edgeIds");
+        assertArray(nodeIds, "flow.nodeIds");
         this.#executionFlowEdgeIds = new Set(edgeIds.map(id => String(id || "")).filter(Boolean));
         this.#executionFlowNodeIds = new Set(nodeIds.map(id => String(id || "")).filter(Boolean));
         this.#redrawEdges();
@@ -282,12 +313,14 @@ export class BehaviorTreeCanvas {
 
     /** @param {Record<string, BehaviorTreeNodeType>} nodeTypes */
     setNodeTypes(nodeTypes) {
-        this.nodeTypes = nodeTypes || {};
+        assertPlainObject(nodeTypes, "nodeTypes");
+        this.nodeTypes = nodeTypes;
         this.render();
     }
 
     /** @param {Record<string, any>} theme */
     setTheme(theme) {
+        assertPlainObject(theme, "theme");
         this.theme = createBehaviorTreeTheme(theme);
         this.background = toColor(this.theme.canvas.background, 0);
         this.backgroundAlpha = this.theme.canvas.backgroundAlpha;
@@ -2375,4 +2408,43 @@ function diagnosticsByNodeId(diagnostics) {
 function cloneTree(tree) {
     if (typeof structuredClone === "function") return structuredClone(tree);
     return JSON.parse(JSON.stringify(tree));
+}
+
+function assertTreeModel(value, name) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new TypeError(`${name} must be a behavior tree model object`);
+    }
+    if (value.nodes !== undefined && !Array.isArray(value.nodes) && (typeof value.nodes !== "object" || value.nodes === null)) {
+        throw new TypeError(`${name}.nodes must be an array or object map`);
+    }
+    if (value.edges !== undefined && !Array.isArray(value.edges)) {
+        throw new TypeError(`${name}.edges must be an array`);
+    }
+    if (value.nodeTypes !== undefined) assertPlainObject(value.nodeTypes, `${name}.nodeTypes`);
+}
+
+function assertPlainObject(value, name) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new TypeError(`${name} must be an object`);
+    }
+}
+
+function assertArray(value, name) {
+    if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`);
+}
+
+function assertBoolean(value, name) {
+    if (typeof value !== "boolean") throw new TypeError(`${name} must be a boolean`);
+}
+
+function assertPositiveNumber(value, name) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+        throw new TypeError(`${name} must be a positive number`);
+    }
+}
+
+function assertPositiveInteger(value, name) {
+    if (!Number.isInteger(value) || value <= 0) {
+        throw new TypeError(`${name} must be a positive integer`);
+    }
 }
