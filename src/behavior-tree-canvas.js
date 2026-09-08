@@ -825,7 +825,6 @@ export class BehaviorTreeCanvas {
         this.#executionAnchors.clear();
         this.#compatiblePortIds.clear();
         this.#compatibleExecutionPortIds.clear();
-        this.#selectionBox.clear();
         this.#diagnostics = [];
         this.#diagnosticsByNodeId.clear();
         this.#normalized = null;
