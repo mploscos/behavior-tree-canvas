@@ -51,7 +51,6 @@ export const NODE_VIEW_THEME = {
     dataPortHitArea: 20,
     portLabel: {
         gap: 13,
-        maxVisible: 7,
         fontSize: 10,
         fill: "#e2e8f0",
         fontWeight: "600",
@@ -272,9 +271,46 @@ export const DEFAULT_BEHAVIOR_TREE_THEME = {
     canvas: CANVAS_THEME
 };
 
-/** @param {Record<string, any>} [overrides] */
-export function createBehaviorTreeTheme(overrides = {}) {
-    return mergeTheme(DEFAULT_BEHAVIOR_TREE_THEME, overrides);
+export const LIGHT_BEHAVIOR_TREE_THEME = mergeTheme(DEFAULT_BEHAVIOR_TREE_THEME, {
+    statusColor: { idle: '#64748b', running: '#0369a1', success: '#15803d',
+        failure: '#dc2626', halted: '#b45309', disabled: '#94a3b8' },
+    categoryColor: { root: '#334155', composite: '#2563eb', decorator: '#9333ea',
+        action: '#15803d', condition: '#a16207', subtree: '#0f766e', operation: '#be123c' },
+    nodeView: {
+        label: { fill: '#172033' }, typeLabel: { fill: '#475569' },
+        portLabel: { fill: '#334155', background: '#ffffff', stroke: '#cbd5e1' },
+        badge: {
+            childOrder: { fill: '#eaf0f6', stroke: '#b8c7d8', textFill: '#334155' },
+            childCapacity: { availableFill: '#dcfce7', fullFill: '#e2e8f0',
+                availableStroke: '#16a34a', fullStroke: '#94a3b8',
+                availableTextFill: '#166534', fullTextFill: '#334155' }
+        }
+    },
+    drawing: {
+        node: { fill: '#ffffff', disabledFill: '#eaf0f6', stroke: '#b8c7d8',
+            selectedStroke: '#007c99', statusStroke: '#ffffff' },
+        port: { normalStroke: '#64748b', activeStroke: '#007c99' },
+        executionPort: { normalStroke: '#64748b', availableStroke: '#15803d',
+            activeStroke: '#15803d' }
+    },
+    canvas: {
+        background: '#f7f9fc',
+        grid: { minorColor: '#cbd5e1', majorColor: '#94a3b8',
+            minorAlpha: 0.4, majorAlpha: 0.45 },
+        childEdge: { idleColor: '#64748b', selectedColor: '#007c99' },
+        dataEdge: { compatibleColor: '#64748b', selectedColor: '#007c99' },
+        connectionPreview: { emptyColor: '#64748b' },
+        selectionBox: { fill: '#007c99', stroke: '#007c99' },
+        animation: { flowColor: '#007c99' }
+    }
+});
+
+export const themes = { dark: DEFAULT_BEHAVIOR_TREE_THEME, light: LIGHT_BEHAVIOR_TREE_THEME };
+
+/** @param {Record<string, any>} [overrides] @param {'dark'|'light'} [name] */
+export function createBehaviorTreeTheme(overrides = {}, name = 'dark') {
+    if (!Object.hasOwn(themes, name)) throw new RangeError(`Unknown behavior tree theme: ${name}`);
+    return mergeTheme(themes[name], overrides);
 }
 
 /** @param {string | undefined} value */

@@ -225,15 +225,17 @@ edge, port or path references. The canvas marks affected nodes and emits a
 
 ### Customize the appearance
 
-Pass partial `theme` overrides to the constructor or update them later:
+The canvas starts with the dark theme. Select the light theme and pass partial
+overrides to the constructor or update them later:
 
 ```js
-viewer.setTheme({
+import { createBehaviorTreeTheme } from "behavior-tree-canvas";
+
+viewer.setTheme(createBehaviorTreeTheme({
   canvas: {
-    background: "#07111f",
     animation: { enabled: false }
   }
-});
+}, "light"));
 ```
 
 Node types can also define their own `color`. Explore the
@@ -275,6 +277,14 @@ import/export implementations.
 
 The package includes [TypeScript declarations](./src/index.d.ts) for the model,
 constructor options, methods and event payloads.
+
+A node with `reference: { path }` is drawn as a linked tree. Double click it
+or call `activateNode(nodeId)` to emit `nodeactivate`; the host decides how to
+load the referenced tree. Set `reference.dynamic` when the path comes from a
+connection and cannot be resolved until execution.
+
+`setTree()` and `loadTree()` discard view positions cached for the previous
+model. Store positions in each node's `position` when they must survive a reload.
 
 | Import | Use |
 | --- | --- |

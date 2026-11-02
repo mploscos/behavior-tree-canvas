@@ -45,6 +45,7 @@ import { areSameDataType, createBehaviorTreeTheme, normalizeCategory, normalizeS
  * @typedef {{
  *   selectionchange:{nodeId:string,node:BehaviorTreeNode|null,nodeIds?:string[],nodes?:BehaviorTreeNode[],edgeId?:string,edge?:BehaviorTreeEdge|null},
  *   nodeclick:{nodeId:string,node:BehaviorTreeNode},
+ *   nodeactivate:{nodeId:string,node:BehaviorTreeNode},
  *   edgeclick:{edgeId:string,edge:BehaviorTreeEdge},
  *   nodedrag:{nodeId:string,position:BehaviorTreePoint},
  *   nodesdrag:{nodeIds:string[],positions:Record<string, BehaviorTreePoint>},
@@ -186,6 +187,8 @@ export class BehaviorTreeCanvas {
     setTree(tree) {
         assertTreeModel(tree, "tree");
         this.tree = cloneTree(tree);
+        this.#nodePositions.clear();
+        this.#lastTapNodeId = "";
         this.#undoStack = [];
         this.#redoStack = [];
         this.selectedNodeId = "";
@@ -214,6 +217,8 @@ export class BehaviorTreeCanvas {
         assertPlainObject(options, "options");
         if (options.recordHistory) this.#recordHistory();
         this.tree = cloneTree(tree);
+        this.#nodePositions.clear();
+        this.#lastTapNodeId = "";
         this.selectedNodeId = "";
         this.selectedEdgeId = "";
         this.#selectedNodeIds.clear();
@@ -339,6 +344,14 @@ export class BehaviorTreeCanvas {
     selectNode(nodeId) {
         const id = String(nodeId || "");
         this.#setSelectedNodeIds(id ? [id] : []);
+    }
+
+    /** Activate a node as a double tap would. @param {string} nodeId */
+    activateNode(nodeId) {
+        const node = this.#normalized?.nodesById.get(nodeId);
+        if (!node) throw new RangeError(`Unknown node: ${nodeId}`);
+        if (this.selectedNodeId !== nodeId) this.selectNode(nodeId);
+        this.#emit("nodeactivate", { nodeId, node });
     }
 
     /** @param {string[]} nodeIds */
@@ -753,12 +766,14 @@ export class BehaviorTreeCanvas {
         this.#nodeViews.clear();
         this.#portAnchors.clear();
         this.#portViews.clear();
+        this.#portLabelViews.clear();
         this.#executionAnchors.clear();
         this.#executionPortViews.clear();
         this.#drawGrid();
         this.#drawEdges();
         this.#drawNodes();
         this.#drawDataEdges();
+        this.#syncPortLabels();
         this.#applySelection();
         this.#knownNodeIds = new Set(this.#normalized.nodes.map(node => node.id));
         this.#hasRenderedScene = true;
@@ -821,6 +836,9 @@ export class BehaviorTreeCanvas {
         this.#nodeViews.clear();
         this.#portViews.clear();
         this.#portAnchors.clear();
+        this.#portLabelViews.clear();
+        this.#connectedPortIds.clear();
+        this.#hoveredPortId = "";
         this.#executionPortViews.clear();
         this.#executionAnchors.clear();
         this.#compatiblePortIds.clear();
@@ -920,6 +938,7 @@ export class BehaviorTreeCanvas {
     #drawDataEdges() {
         const theme = this.theme.canvas.dataEdge;
         if (!this.#normalized) return;
+        this.#connectedPortIds.clear();
         for (const edge of this.#normalized.dataEdges) {
             const from = this.#portAnchors.get(`${edge.fromNodeId}:${edge.fromPortId}`);
             const to = this.#portAnchors.get(`${edge.toNodeId}:${edge.toPortId}`);
@@ -927,6 +946,8 @@ export class BehaviorTreeCanvas {
             const fromNode = this.#positions.get(edge.fromNodeId);
             const toNode = this.#positions.get(edge.toNodeId);
             if (!fromNode || !toNode) continue;
+            this.#connectedPortIds.add(`${edge.fromNodeId}:${edge.fromPortId}`);
+            this.#connectedPortIds.add(`${edge.toNodeId}:${edge.toPortId}`);
 
             const x1 = fromNode.x + from.x;
             const y1 = fromNode.y + from.y;
@@ -1004,6 +1025,15 @@ export class BehaviorTreeCanvas {
                 onNodePointerDown: (event, targetNode) => this.#handleNodePointerDown(event, targetNode),
                 onNodeTap: (event, targetNode) => this.#handleNodeTap(event, targetNode),
                 onPortPointerDown: (event, port) => this.#handlePortPointerDown(event, port),
+                onPortPointerOver: port => {
+                    this.#hoveredPortId = port.fullId;
+                    this.#syncPortLabels();
+                },
+                onPortPointerOut: port => {
+                    if (this.#hoveredPortId !== port.fullId) return;
+                    this.#hoveredPortId = "";
+                    this.#syncPortLabels();
+                },
                 onExecutionPortPointerDown: (event, targetNode, kind) => this.#handleExecutionPortPointerDown(event, targetNode, kind)
             });
             const view = created.view;
@@ -1012,6 +1042,7 @@ export class BehaviorTreeCanvas {
             this.#nodeViews.set(node.id, view);
             for (const [portId, anchor] of created.portAnchors) this.#portAnchors.set(portId, anchor);
             for (const [portId, portView] of created.portViews) this.#portViews.set(portId, portView);
+            for (const [portId, labelView] of created.portLabelViews) this.#portLabelViews.set(portId, labelView);
             for (const [portId, anchor] of created.executionAnchors) this.#executionAnchors.set(portId, anchor);
             for (const [portId, portView] of created.executionViews) this.#executionPortViews.set(portId, portView);
             this.#nodeLayer.addChild(view);
@@ -1145,6 +1176,7 @@ export class BehaviorTreeCanvas {
             hoverPortId: ""
         };
         this.#compatiblePortIds = this.#compatiblePortsFor(port);
+        this.#hoveredPortId = "";
         this.#applyPortHighlights(port.fullId, "");
         this.#drawConnectionPreview();
         this.#emit("connectionstart", { port, suggestions });
@@ -1238,6 +1270,14 @@ export class BehaviorTreeCanvas {
         if (hasSelectionModifier(event)) return;
         this.#selectNode(node);
         this.#emit("nodeclick", { nodeId: node.id, node });
+        const now = performance.now();
+        if (this.#lastTapNodeId === node.id && now - this.#lastTapAt < 350) {
+            this.#lastTapNodeId = "";
+            this.activateNode(node.id);
+        } else {
+            this.#lastTapNodeId = node.id;
+            this.#lastTapAt = now;
+        }
     }
 
     /** @param {any} event */
@@ -1969,6 +2009,17 @@ export class BehaviorTreeCanvas {
             else if (this.#compatiblePortIds.has(port.fullId)) state = "compatible";
             drawPort(view, port, /** @type {any} */ (state), this.theme.drawing);
         }
+        this.#syncPortLabels();
+    }
+
+    #syncPortLabels() {
+        const drag = this.#drag;
+        const source = drag && drag.kind === "connect" ? drag.port.fullId : "";
+        for (const [portId, label] of this.#portLabelViews) {
+            label.visible = source
+                ? portId === source || this.#compatiblePortIds.has(portId)
+                : this.#connectedPortIds.has(portId) || portId === this.#hoveredPortId;
+        }
     }
 
     /**
@@ -2105,6 +2156,13 @@ export class BehaviorTreeCanvas {
     #executionFlowEdgeIds = new Set();
     /** @type {Map<string, Graphics>} */
     #portViews = new Map();
+    /** @type {Map<string, import('pixi.js').Container>} */
+    #portLabelViews = new Map();
+    /** @type {Set<string>} */
+    #connectedPortIds = new Set();
+    #hoveredPortId = "";
+    #lastTapNodeId = "";
+    #lastTapAt = 0;
     /** @type {Map<string, {x:number,y:number,direction:'input'|'output',dataType:string,nodeId:string,portId:string,fullId:string}>} */
     #portAnchors = new Map();
     /** @type {Map<string, Graphics>} */

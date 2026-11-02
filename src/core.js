@@ -28,6 +28,7 @@
  *   parentId?:string|null,
  *   children?:BehaviorTreeChildRef[],
  *   position?:BehaviorTreePoint,
+ *   reference?:{path:string,dynamic?:boolean},
  *   params?:Record<string, any>,
  *   ports?:BehaviorTreePorts,
  *   [key:string]:any

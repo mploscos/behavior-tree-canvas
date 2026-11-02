@@ -23,6 +23,56 @@ test("serializes and loads tree copies without sharing references", () => {
   assert.equal(viewer.getTree().nodes[0].id, "next");
 });
 
+test("replacing a tree discards positions cached for matching node ids", () => {
+  const positioned = {
+    rootId: "root",
+    nodes: [
+      { id: "root", children: ["child"], position: { x: 0, y: 0 } },
+      { id: "child", position: { x: 10000, y: 0 } }
+    ]
+  };
+  const unpositioned = {
+    rootId: "root",
+    nodes: [{ id: "root", children: ["child"] }, { id: "child" }]
+  };
+  const fresh = new BehaviorTreeCanvas({ target: {}, tree: unpositioned });
+  fresh.render();
+  fresh.app = { screen: { width: 1000, height: 800 } };
+  let expectedScale = 0;
+  fresh.on("viewportchange", event => { expectedScale = event.scale; });
+  fresh.fit();
+
+  for (const method of ["setTree", "loadTree"]) {
+    const viewer = new BehaviorTreeCanvas({ target: {}, tree: positioned });
+    viewer.render();
+    viewer[method](unpositioned);
+    viewer.app = { screen: { width: 1000, height: 800 } };
+    let scale = 0;
+    viewer.on("viewportchange", event => { scale = event.scale; });
+    viewer.fit();
+    assert.equal(scale, expectedScale, method);
+  }
+});
+
+test("activates a selected reference node through the public API", () => {
+  const viewer = new BehaviorTreeCanvas({
+    target: {},
+    tree: { rootId: "root", nodes: [
+      { id: "root", children: ["sub"] },
+      { id: "sub", category: "subtree", reference: { path: "trees/child.tree" } }
+    ] }
+  });
+  const events = [];
+  viewer.on("nodeactivate", event => events.push(event));
+  viewer.render();
+
+  viewer.activateNode("sub");
+
+  assert.deepEqual(viewer.getSelectedNodeIds(), ["sub"]);
+  assert.equal(events[0].node.reference.path, "trees/child.tree");
+  assert.throws(() => viewer.activateNode("missing"), /Unknown node/);
+});
+
 test("public APIs reject invalid input instead of applying silent defaults", () => {
   assert.throws(() => new BehaviorTreeCanvas(), /options/);
   assert.throws(() => new BehaviorTreeCanvas({ target: {}, tree: null }), /tree/);

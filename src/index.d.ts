@@ -41,6 +41,7 @@ export type BehaviorTreeNode = {
   parentId?: string | null;
   children?: BehaviorTreeChildRef[];
   position?: BehaviorTreePoint;
+  reference?: { path: string; dynamic?: boolean };
   params?: Record<string, any>;
   ports?: BehaviorTreePorts;
 };
@@ -175,7 +176,9 @@ export const NODE_VIEW_THEME: Record<string, any>;
 export const DRAWING_THEME: Record<string, any>;
 export const CANVAS_THEME: Record<string, any>;
 export const DEFAULT_BEHAVIOR_TREE_THEME: Record<string, any>;
-export function createBehaviorTreeTheme(overrides?: Record<string, any>): Record<string, any>;
+export const LIGHT_BEHAVIOR_TREE_THEME: Record<string, any>;
+export const themes: { dark: Record<string, any>; light: Record<string, any> };
+export function createBehaviorTreeTheme(overrides?: Record<string, any>, name?: 'dark' | 'light'): Record<string, any>;
 export function normalizeCategory(value?: string): keyof typeof CATEGORY_COLOR;
 export function normalizeStatus(value?: string): keyof typeof STATUS_COLOR;
 export function toColor(value: number | string | undefined, fallback: number | string): number;
@@ -185,6 +188,7 @@ export function areSameDataType(a?: string, b?: string): boolean;
 export type BehaviorTreeCanvasEvents = {
   selectionchange: { nodeId: string; node: BehaviorTreeNode | null; nodeIds?: string[]; nodes?: BehaviorTreeNode[]; edgeId?: string; edge?: BehaviorTreeEdge | null };
   nodeclick: { nodeId: string; node: BehaviorTreeNode };
+  nodeactivate: { nodeId: string; node: BehaviorTreeNode };
   edgeclick: { edgeId: string; edge: BehaviorTreeEdge };
   nodedrag: { nodeId: string; position: BehaviorTreePoint };
   nodesdrag: { nodeIds: string[]; positions: Record<string, BehaviorTreePoint> };
@@ -341,6 +345,7 @@ export class BehaviorTreeCanvas {
   setNodeTypes(nodeTypes: Record<string, BehaviorTreeNodeType>): void;
   setTheme(theme: Record<string, any>): void;
   selectNode(nodeId: string): void;
+  activateNode(nodeId: string): void;
   selectNodes(nodeIds: string[]): void;
   getSelectedNodeIds(): string[];
   toggleNodeSelection(nodeId: string): void;

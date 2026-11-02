@@ -30,6 +30,8 @@ import { DEFAULT_BEHAVIOR_TREE_THEME, normalizeCategory, normalizeStatus, toColo
  *   onNodePointerDown:(event:any,node:BehaviorTreeNode) => void,
  *   onNodeTap:(event:any,node:BehaviorTreeNode) => void,
  *   onPortPointerDown:(event:any,port:NormalizedBehaviorTreePort) => void,
+ *   onPortPointerOver:(port:NormalizedBehaviorTreePort) => void,
+ *   onPortPointerOut:(port:NormalizedBehaviorTreePort) => void,
  *   onExecutionPortPointerDown:(event:any,node:BehaviorTreeNode,kind:'parent'|'child') => void
  * }} options
  */
@@ -45,6 +47,14 @@ export function createNodeView(options) {
     const height = nodeVisualHeight(nodeHeight, ports);
     const selected = options.selectedNodeIds?.has(node.id) || node.id === selectedNodeId;
 
+    if (node.reference) {
+        const backing = new Graphics();
+        backing.roundRect(-(nodeWidth / 2) + 6, -(height / 2) - 6, nodeWidth, height, theme.drawing.node.radius);
+        backing.fill({ color: toColor(theme.drawing.node.fill, 0), alpha: theme.drawing.node.fillAlpha });
+        backing.stroke({ width: 1.5, color: accent, alpha: 0.65 });
+        view.addChild(backing);
+    }
+
     drawNodeBackground(bg, {
         width: nodeWidth,
         height,
@@ -54,9 +64,15 @@ export function createNodeView(options) {
         disabled: status === "disabled",
         validationSeverity: options.validationSeverity
     }, theme.drawing);
+    view.addChild(bg);
 
+    const title = String(node.label || node.name || node.id).replace(/([a-z\d])([A-Z])/g, "$1 $2");
+    const subtitle = node.reference ?
+        node.reference.dynamic ? 'Dynamic path' : 'Referenced tree' :
+        String(type.label || node.type || category);
+    const repeatedSubtitle = title.replaceAll(" ", "").toLowerCase() === subtitle.toLowerCase();
     const label = new Text({
-        text: String(node.label || node.name || node.id),
+        text: title,
         style: {
             fontFamily: viewTheme.fontFamily,
             fontSize: viewTheme.label.fontSize,
@@ -64,41 +80,68 @@ export function createNodeView(options) {
             fontWeight: viewTheme.label.fontWeight,
             align: viewTheme.label.align,
             wordWrap: true,
-            wordWrapWidth: nodeWidth - viewTheme.label.wordWrapPadding,
+            breakWords: true,
+            wordWrapWidth: nodeWidth - viewTheme.label.wordWrapPadding - (node.reference ? 24 : 0),
             lineHeight: viewTheme.label.lineHeight,
             letterSpacing: viewTheme.label.letterSpacing
         }
     });
     label.anchor.set(0.5, 0.5);
-    label.y = viewTheme.label.y;
     label.resolution = viewTheme.textResolution;
 
     const typeLabel = new Text({
-        text: String(type.label || node.type || category).toUpperCase(),
+        text: subtitle.toUpperCase(),
         style: {
             fontFamily: viewTheme.fontFamily,
             fontSize: viewTheme.typeLabel.fontSize,
             fill: toColor(viewTheme.typeLabel.fill, 0),
             fontWeight: viewTheme.typeLabel.fontWeight,
             align: viewTheme.typeLabel.align,
+            wordWrap: true,
+            breakWords: true,
+            wordWrapWidth: nodeWidth - viewTheme.label.wordWrapPadding,
             letterSpacing: viewTheme.typeLabel.letterSpacing
         }
     });
     typeLabel.anchor.set(0.5, 0.5);
-    typeLabel.y = viewTheme.typeLabel.y;
+    typeLabel.visible = !repeatedSubtitle;
     typeLabel.alpha = viewTheme.typeLabel.alpha;
     typeLabel.resolution = viewTheme.textResolution;
+    const contentHeight = label.height + (repeatedSubtitle ? 0 : typeLabel.height + 4);
+    const textScale = Math.min(1, (height - 12) / contentHeight);
+    label.scale.set(textScale);
+    typeLabel.scale.set(textScale);
+    if (repeatedSubtitle) label.y = 0;
+    else {
+        const centerY = (viewTheme.label.y + viewTheme.typeLabel.y) / 2;
+        label.y = centerY - (typeLabel.height + 4) / 2;
+        typeLabel.y = centerY + (label.height + 4) / 2;
+    }
+    if (node.reference) {
+        label.x = 10;
+        typeLabel.x = 10;
+        const symbol = new Graphics();
+        symbol.position.set(-(nodeWidth / 2) + 30, 0);
+        symbol.roundRect(-2, -8, 11, 12, 2);
+        symbol.stroke({ width: 1.5, color: accent });
+        symbol.roundRect(-8, -3, 11, 12, 2);
+        symbol.fill({ color: toColor(theme.drawing.node.fill, 0) });
+        symbol.stroke({ width: 1.5, color: accent });
+        view.addChild(symbol);
+    }
 
     /** @type {Map<string, {x:number,y:number,direction:'input'|'output',dataType:string,nodeId:string,portId:string,fullId:string}>} */
     const portAnchors = new Map();
     /** @type {Map<string, Graphics>} */
     const portViews = new Map();
+    /** @type {Map<string, Container>} */
+    const portLabelViews = new Map();
     /** @type {Map<string, {x:number,y:number,kind:'parent'|'child',nodeId:string,state?:'normal'|'available'|'full'}>} */
     const executionAnchors = new Map();
     /** @type {Map<string, Graphics>} */
     const executionViews = new Map();
 
-    view.addChild(bg, label, typeLabel);
+    view.addChild(label, typeLabel);
     addExecutionPorts(view, {
         node,
         height,
@@ -120,7 +163,10 @@ export function createNodeView(options) {
         theme,
         portAnchors,
         portViews,
-        onPortPointerDown: options.onPortPointerDown
+        portLabelViews,
+        onPortPointerDown: options.onPortPointerDown,
+        onPortPointerOver: options.onPortPointerOver,
+        onPortPointerOut: options.onPortPointerOut
     });
     addNodeIndicators(view, {
         height,
@@ -143,7 +189,7 @@ export function createNodeView(options) {
     view.on("pointerover", () => { view.alpha = viewTheme.hoverAlpha; });
     view.on("pointerout", () => { view.alpha = viewTheme.normalAlpha; });
 
-    return { view, height, portAnchors, portViews, executionAnchors, executionViews };
+    return { view, height, portAnchors, portViews, portLabelViews, executionAnchors, executionViews };
 }
 
 /**
@@ -165,7 +211,10 @@ export function nodeVisualHeight(nodeHeight, ports) {
  *   readonly:boolean,
  *   portAnchors:Map<string, {x:number,y:number,direction:'input'|'output',dataType:string,nodeId:string,portId:string,fullId:string}>,
  *   portViews:Map<string, Graphics>,
- *   onPortPointerDown:(event:any,port:NormalizedBehaviorTreePort) => void
+ *   portLabelViews:Map<string, Container>,
+ *   onPortPointerDown:(event:any,port:NormalizedBehaviorTreePort) => void,
+ *   onPortPointerOver:(port:NormalizedBehaviorTreePort) => void,
+ *   onPortPointerOut:(port:NormalizedBehaviorTreePort) => void
  * }} options
  */
 function addPorts(view, options) {
@@ -239,7 +288,10 @@ function addExecutionPort(view, options, kind, x, y, state = "normal") {
  *   readonly:boolean,
  *   portAnchors:Map<string, {x:number,y:number,direction:'input'|'output',dataType:string,nodeId:string,portId:string,fullId:string}>,
  *   portViews:Map<string, Graphics>,
- *   onPortPointerDown:(event:any,port:NormalizedBehaviorTreePort) => void
+ *   portLabelViews:Map<string, Container>,
+ *   onPortPointerDown:(event:any,port:NormalizedBehaviorTreePort) => void,
+ *   onPortPointerOver:(port:NormalizedBehaviorTreePort) => void,
+ *   onPortPointerOut:(port:NormalizedBehaviorTreePort) => void
  * }} options
  */
 function addPortGroup(view, options) {
@@ -249,7 +301,6 @@ function addPortGroup(view, options) {
     const x = direction === "input" ? -(nodeWidth / 2) : (nodeWidth / 2);
     const labelAnchor = direction === "input" ? 1 : 0;
     const labelX = direction === "input" ? x - viewTheme.portLabel.gap : x + viewTheme.portLabel.gap;
-    const maxLabels = viewTheme.portLabel.maxVisible;
 
     for (let index = 0; index < ports.length; index += 1) {
         const port = ports[index];
@@ -262,12 +313,14 @@ function addPortGroup(view, options) {
         g.cursor = options.readonly ? "default" : "crosshair";
         g.hitArea = centeredHitArea(viewTheme.dataPortHitArea);
         g.on("pointerdown", event => options.onPortPointerDown(event, port));
+        g.on("pointerover", () => options.onPortPointerOver(port));
+        g.on("pointerout", () => options.onPortPointerOut(port));
         view.addChild(g);
         options.portAnchors.set(port.fullId, { x, y, direction, dataType: port.dataType, nodeId, portId: port.id, fullId: port.fullId });
         options.portAnchors.set(`${nodeId}:${port.id}`, { x, y, direction, dataType: port.dataType, nodeId, portId: port.id, fullId: port.fullId });
         options.portViews.set(port.fullId, g);
 
-        if (ports.length <= maxLabels) addPortLabel(view, { port, direction, labelAnchor, labelX, y, theme: options.theme });
+        options.portLabelViews.set(port.fullId, addPortLabel(view, { port, direction, labelAnchor, labelX, y, theme: options.theme }));
     }
 }
 
@@ -312,7 +365,12 @@ function addPortLabel(view, options) {
         color: toColor(viewTheme.portLabel.stroke, 0),
         alpha: viewTheme.portLabel.strokeAlpha
     });
-    view.addChild(labelBg, text);
+    const label = new Container();
+    label.visible = false;
+    label.eventMode = "none";
+    label.addChild(labelBg, text);
+    view.addChild(label);
+    return label;
 }
 
 /**
